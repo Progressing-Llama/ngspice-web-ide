@@ -76,19 +76,30 @@ export default function App() {
         body: JSON.stringify({ netlist: activeFile.content })
       });
 
-      const result: SimulationResult = await response.json();
+      const result: any = await response.json();
       
+      if (result.error) {
+        setLogs(prev => prev + "Bridge Error: " + result.error + "\n");
+        setIsSimulating(false);
+        return;
+      }
+
       // Always show stdout and stderr if they exist
       if (result.stdout) {
         setLogs(prev => prev + result.stdout + "\n");
       }
-      if (result.stderr) {
+      if (result.stderr && result.stderr !== "No stderr captured.") {
         setLogs(prev => prev + "STDERR:\n" + result.stderr + "\n");
       }
 
       if (result.success) {
         if (result.plotData && result.plotData.length > 0) {
           setPlotData(result.plotData);
+        } else if (result.stdout === "No stdout captured." && result.stderr === "No stderr captured.") {
+          setLogs(prev => prev + "Warning: Simulation returned no output. Please check if ngspice is installed and in your PATH.\n");
+          if (result.debug) {
+            setLogs(prev => prev + "Debug Command: " + result.debug.command + "\n");
+          }
         } else {
           setLogs(prev => prev + "Warning: No plot data found in simulation output.\n");
         }

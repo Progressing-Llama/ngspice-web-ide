@@ -7,9 +7,20 @@ interface ConsoleProps {
 }
 
 export const Console: React.FC<ConsoleProps> = ({ logs, error }) => {
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [logs, error]);
+
   return (
-    <div className="h-full w-full bg-[#0c0c0c] text-green-400 font-mono text-sm p-4 overflow-auto border border-white/10 rounded-lg shadow-inner">
-      <div className="flex items-center gap-2 mb-2 text-white/50 border-b border-white/10 pb-2">
+    <div 
+      ref={scrollRef}
+      className="h-full w-full bg-[#0c0c0c] text-green-400 font-mono text-sm p-4 overflow-auto border border-white/10 rounded-lg shadow-inner scroll-smooth"
+    >
+      <div className="flex items-center gap-2 mb-2 text-white/50 border-b border-white/10 pb-2 sticky top-0 bg-[#0c0c0c] z-10">
         <Terminal size={14} />
         <span className="text-xs uppercase tracking-wider font-sans font-semibold">Output Console</span>
       </div>

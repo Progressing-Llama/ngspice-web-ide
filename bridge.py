@@ -78,6 +78,23 @@ def parse_raw_file(filepath):
 def status():
     return jsonify({"status": "online", "message": "ngspice bridge is running"})
 
+@app.route('/debug', methods=['GET'])
+def debug():
+    """Checks if ngspice is available in the system path."""
+    try:
+        process = subprocess.Popen(['ngspice', '-v'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        stdout, stderr = process.communicate(timeout=5)
+        return jsonify({
+            "ngspice_found": True,
+            "version_info": stdout or stderr,
+            "path": subprocess.check_output(['which', 'ngspice']).decode().strip() if os.name != 'nt' else "Windows path"
+        })
+    except Exception as e:
+        return jsonify({
+            "ngspice_found": False,
+            "error": str(e)
+        })
+
 @app.route('/simulate', methods=['POST'])
 def simulate():
     data = request.json
@@ -103,38 +120,57 @@ def simulate():
         else:
             netlist += "\n.control\nset filetype=ascii\nrun\n.endc\n.end"
 
-    with tempfile.NamedTemporaryFile(suffix='.cir', delete=False, mode='w') as tmp:
-        tmp.write(netlist)
-        tmp_path = tmp.name
-
+    # Use a fixed filename in the temp directory to avoid permission issues on some systems
+    tmp_dir = tempfile.gettempdir()
+    tmp_path = os.path.join(tmp_dir, f"sim_{os.getpid()}.cir")
     raw_output_path = tmp_path + ".raw"
-    
+
     try:
+        with open(tmp_path, 'w') as f:
+            f.write(netlist)
+            f.flush()
+            os.fsync(f.fileno())
+
         # Use batch mode (-b)
-        # We use -n to avoid reading .spiceinit which might have conflicting settings
+        # -n: don't read .spiceinit
+        # -r: raw output file
+        # We use a list for the command to avoid shell injection and handle spaces in paths
+        cmd = ['ngspice', '-b', '-n', '-r', raw_output_path, tmp_path]
+        
+        print(f"Running command: {' '.join(cmd)}")
+        
         process = subprocess.Popen(
-            ['ngspice', '-b', '-n', '-r', raw_output_path, tmp_path],
+            cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
         )
         stdout, stderr = process.communicate(timeout=30)
 
+        print(f"STDOUT: {stdout[:100]}...")
+        print(f"STDERR: {stderr[:100]}...")
+
         plot_data = []
         if os.path.exists(raw_output_path):
             plot_data = parse_raw_file(raw_output_path)
+            print(f"Parsed {len(plot_data)} data points.")
 
         return jsonify({
             "stdout": stdout or "No stdout captured.",
             "stderr": stderr or "No stderr captured.",
-            "success": True, # We treat it as success if we got output, App.tsx handles the rest
-            "plotData": plot_data
+            "success": True,
+            "plotData": plot_data,
+            "debug": {
+                "command": ' '.join(cmd),
+                "return_code": process.returncode
+            }
         })
 
     except subprocess.TimeoutExpired:
         process.kill()
         return jsonify({"error": "Simulation timed out"}), 500
     except Exception as e:
+        print(f"Simulation error: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
         if os.path.exists(tmp_path):
