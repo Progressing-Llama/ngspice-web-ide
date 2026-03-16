@@ -4,8 +4,24 @@ import { SpiceEditor } from './components/SpiceEditor';
 import { Console } from './components/Console';
 import { PlotViewer } from './components/PlotViewer';
 import { FileExplorer } from './components/FileExplorer';
-import { SpiceFile, SimulationResult } from './types';
+import { SpiceFile, SimulationResult, SpiceModel } from './types';
 import { motion, AnimatePresence } from 'motion/react';
+import { ModelLibrary } from './components/ModelLibrary';
+
+const DEFAULT_MODELS: SpiceModel[] = [
+  { 
+    id: 'm1', 
+    name: '1N4148 Diode', 
+    enabled: true, 
+    content: '.model D1N4148 D(Is=2.682n N=1.836 Rs=0.5664 Ikf=44.17m Cjo=4p M=0.3333 Vj=0.5 Fc=0.5 Isr=1.565n Nr=2 Bv=100 Ibv=100u Tt=11.54n)' 
+  },
+  {
+    id: 'm2',
+    name: '2N2222 NPN',
+    enabled: false,
+    content: '.model Q2N2222 NPN(Is=14.34f Xti=3 Eg=1.11 Vaf=74.03 Bf=255.9 Ne=1.307 Ise=14.34f Ikf=.2847 Xtb=1.5 Br=6.092 Nc=2 Isc=0 Ikr=0 Rc=1 Cjc=7.306p Mjc=.3416 Vjc=.75 Fc=.5 Cje=22.01p Mje=.377 Vje=.75 Tr=46.91n Tf=411.1p Itf=.6 Vtf=1.7 Xtf=3 Rb=10)'
+  }
+];
 
 const DEFAULT_NETLIST = `* Simple RC Circuit
 V1 1 0 SIN(0 5 1k)
@@ -23,7 +39,10 @@ export default function App() {
   const [files, setFiles] = useState<SpiceFile[]>([
     { id: '1', name: 'rc_circuit.cir', content: DEFAULT_NETLIST }
   ]);
+  const [models, setModels] = useState<SpiceModel[]>(DEFAULT_MODELS);
+  const [sidebarTab, setSidebarTab] = useState<'files' | 'models'>('files');
   const [activeFileId, setActiveFileId] = useState<string | null>('1');
+  const [activeModelId, setActiveModelId] = useState<string | null>(null);
   const [logs, setLogs] = useState<string>("");
   const [plotData, setPlotData] = useState<any[]>([]);
   const [isSimulating, setIsSimulating] = useState(false);
@@ -32,6 +51,16 @@ export default function App() {
   const [bridgeStatus, setBridgeStatus] = useState<'online' | 'offline' | 'mock'>('offline');
 
   const activeFile = files.find(f => f.id === activeFileId);
+  const activeModel = models.find(m => m.id === activeModelId);
+
+  const handleContentChange = (content: string | undefined) => {
+    if (content === undefined) return;
+    if (activeFileId) {
+      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, content } : f));
+    } else if (activeModelId) {
+      setModels(prev => prev.map(m => m.id === activeModelId ? { ...m, content } : m));
+    }
+  };
 
   // Check bridge status
   useEffect(() => {
@@ -70,10 +99,14 @@ export default function App() {
         ? `${bridgeUrl}/simulate` 
         : '/api/mock/simulate';
 
+      // Append enabled models to the netlist
+      const enabledModels = models.filter(m => m.enabled).map(m => m.content).join('\n');
+      const finalNetlist = activeFile.content + '\n\n* --- Library Models ---\n' + enabledModels;
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ netlist: activeFile.content })
+        body: JSON.stringify({ netlist: finalNetlist })
       });
 
       const result: any = await response.json();
@@ -110,12 +143,6 @@ export default function App() {
       setLogs(prev => prev + "Error connecting to bridge: " + (error as Error).message);
     } finally {
       setIsSimulating(false);
-    }
-  };
-
-  const handleFileChange = (content: string | undefined) => {
-    if (activeFileId && content !== undefined) {
-      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, content } : f));
     }
   };
 
@@ -185,14 +212,57 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
-        <aside className="w-64 flex-shrink-0">
-          <FileExplorer 
-            files={files} 
-            activeFileId={activeFileId} 
-            onSelect={setActiveFileId}
-            onNew={handleNewFile}
-            onDelete={handleDeleteFile}
-          />
+        <aside className="w-72 flex-shrink-0 flex flex-col border-r border-white/10 bg-[#0c0c0d]">
+          {/* Sidebar Tabs */}
+          <div className="flex border-b border-white/10">
+            <button 
+              onClick={() => setSidebarTab('files')}
+              className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                sidebarTab === 'files' ? 'text-blue-400 bg-white/5 border-b-2 border-blue-500' : 'text-white/30 hover:text-white/60'
+              }`}
+            >
+              Files
+            </button>
+            <button 
+              onClick={() => setSidebarTab('models')}
+              className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                sidebarTab === 'models' ? 'text-blue-400 bg-white/5 border-b-2 border-blue-500' : 'text-white/30 hover:text-white/60'
+              }`}
+            >
+              Library
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-hidden">
+            {sidebarTab === 'files' ? (
+              <FileExplorer 
+                files={files} 
+                activeFileId={activeFileId} 
+                onSelect={(id) => {
+                  setActiveFileId(id);
+                  setActiveModelId(null);
+                }}
+                onNew={handleNewFile}
+                onDelete={handleDeleteFile}
+              />
+            ) : (
+              <ModelLibrary 
+                models={models}
+                activeModelId={activeModelId}
+                onAdd={(m) => setModels(prev => [...prev, m])}
+                onUpdate={(m) => setModels(prev => prev.map(old => old.id === m.id ? m : old))}
+                onDelete={(id) => {
+                  setModels(prev => prev.filter(m => m.id !== id));
+                  if (activeModelId === id) setActiveModelId(null);
+                }}
+                onToggle={(id) => setModels(prev => prev.map(m => m.id === id ? { ...m, enabled: !m.enabled } : m))}
+                onSelect={(id) => {
+                  setActiveModelId(id);
+                  setActiveFileId(null);
+                }}
+              />
+            )}
+          </div>
         </aside>
 
         {/* Editor and Results Area */}
@@ -201,8 +271,8 @@ export default function App() {
           <div className="flex-1 flex overflow-hidden p-4 gap-4">
             <div className="flex-[3] min-w-0">
               <SpiceEditor 
-                value={activeFile?.content || ""} 
-                onChange={handleFileChange} 
+                value={activeFile?.content || activeModel?.content || ""} 
+                onChange={handleContentChange} 
               />
             </div>
             <div className="flex-[2] min-w-0">

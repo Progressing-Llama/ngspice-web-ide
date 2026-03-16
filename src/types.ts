@@ -10,3 +10,10 @@ export interface SpiceFile {
   name: string;
   content: string;
 }
+
+export interface SpiceModel {
+  id: string;
+  name: string;
+  content: string;
+  enabled: boolean;
+}

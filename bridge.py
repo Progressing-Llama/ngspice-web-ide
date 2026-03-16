@@ -120,10 +120,11 @@ def simulate():
         else:
             netlist += "\n.control\nset filetype=ascii\nrun\n.endc\n.end"
 
-    # Use a fixed filename in the temp directory to avoid permission issues on some systems
+    # Use a fixed filename in the temp directory to avoid permission issues
     tmp_dir = tempfile.gettempdir()
     tmp_path = os.path.join(tmp_dir, f"sim_{os.getpid()}.cir")
     raw_output_path = tmp_path + ".raw"
+    log_output_path = tmp_path + ".log"
 
     try:
         with open(tmp_path, 'w') as f:
@@ -134,21 +135,30 @@ def simulate():
         # Use batch mode (-b)
         # -n: don't read .spiceinit
         # -r: raw output file
-        # We use a list for the command to avoid shell injection and handle spaces in paths
-        cmd = ['ngspice', '-b', '-n', '-r', raw_output_path, tmp_path]
+        # -o: output log file (often more reliable than pipe capture in batch mode)
+        cmd = ['ngspice', '-b', '-n', '-r', raw_output_path, '-o', log_output_path, tmp_path]
         
         print(f"Running command: {' '.join(cmd)}")
         
+        # We still capture stdout/stderr just in case, but rely on the log file
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.STDOUT, # Merge stderr into stdout
             text=True
         )
-        stdout, stderr = process.communicate(timeout=30)
+        stdout_capture, _ = process.communicate(timeout=30)
 
-        print(f"STDOUT: {stdout[:100]}...")
-        print(f"STDERR: {stderr[:100]}...")
+        # Read the log file which contains the actual simulation output and print results
+        log_content = ""
+        if os.path.exists(log_output_path):
+            with open(log_output_path, 'r') as f:
+                log_content = f.read()
+        
+        # Combine captured stdout and log content
+        final_output = log_content if log_content else stdout_capture
+
+        print(f"Output length: {len(final_output)}")
 
         plot_data = []
         if os.path.exists(raw_output_path):
@@ -156,30 +166,28 @@ def simulate():
             print(f"Parsed {len(plot_data)} data points.")
 
         return jsonify({
-            "stdout": stdout or "No stdout captured.",
-            "stderr": stderr or "No stderr captured.",
+            "stdout": final_output or "No output captured from ngspice.",
+            "stderr": "", # Merged into stdout
             "success": True,
             "plotData": plot_data,
             "debug": {
                 "command": ' '.join(cmd),
-                "return_code": process.returncode
+                "return_code": process.returncode,
+                "log_exists": os.path.exists(log_output_path)
             }
         })
 
     except subprocess.TimeoutExpired:
-        process.kill()
+        if 'process' in locals(): process.kill()
         return jsonify({"error": "Simulation timed out"}), 500
     except Exception as e:
         print(f"Simulation error: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-        if os.path.exists(raw_output_path):
-            try:
-                os.remove(raw_output_path)
-            except:
-                pass
+        for p in [tmp_path, raw_output_path, log_output_path]:
+            if os.path.exists(p):
+                try: os.remove(p)
+                except: pass
 
 if __name__ == '__main__':
     app.run(port=5000)
