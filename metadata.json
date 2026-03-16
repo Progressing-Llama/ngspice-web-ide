@@ -1,0 +1,5 @@
+{
+  "name": "SpiceIDE",
+  "description": "A lightweight IDE for ngspice with a web-based editor, simulation console, and plot viewer.",
+  "requestFramePermissions": []
+}
