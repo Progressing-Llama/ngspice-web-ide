@@ -36,17 +36,33 @@ plot v(1) v(2)
 .end`;
 
 export default function App() {
-  const [files, setFiles] = useState<SpiceFile[]>([
-    { id: '1', name: 'rc_circuit.cir', content: DEFAULT_NETLIST }
-  ]);
-  const [models, setModels] = useState<SpiceModel[]>(DEFAULT_MODELS);
-  const [sidebarTab, setSidebarTab] = useState<'files' | 'models'>('files');
-  const [activeFileId, setActiveFileId] = useState<string | null>('1');
-  const [activeModelId, setActiveModelId] = useState<string | null>(null);
-  const [logs, setLogs] = useState<string>("");
+  const [files, setFiles] = useState<SpiceFile[]>(() => {
+    const saved = localStorage.getItem('spice_files');
+    return saved ? JSON.parse(saved) : [
+      { id: '1', name: 'rc_circuit.cir', content: DEFAULT_NETLIST }
+    ];
+  });
+  const [models, setModels] = useState<SpiceModel[]>(() => {
+    const saved = localStorage.getItem('spice_models');
+    return saved ? JSON.parse(saved) : DEFAULT_MODELS;
+  });
+  const [sidebarTab, setSidebarTab] = useState<'files' | 'models'>(() => {
+    return (localStorage.getItem('spice_sidebar_tab') as 'files' | 'models') || 'files';
+  });
+  const [activeFileId, setActiveFileId] = useState<string | null>(() => {
+    return localStorage.getItem('spice_active_file_id') || '1';
+  });
+  const [activeModelId, setActiveModelId] = useState<string | null>(() => {
+    return localStorage.getItem('spice_active_model_id') || null;
+  });
+  const [logs, setLogs] = useState<string>(() => {
+    return localStorage.getItem('spice_logs') || "";
+  });
   const [plotData, setPlotData] = useState<any[]>([]);
   const [isSimulating, setIsSimulating] = useState(false);
-  const [bridgeUrl, setBridgeUrl] = useState("http://localhost:5000");
+  const [bridgeUrl, setBridgeUrl] = useState(() => {
+    return localStorage.getItem('spice_bridge_url') || "http://localhost:5000";
+  });
   const [showSettings, setShowSettings] = useState(false);
   const [bridgeStatus, setBridgeStatus] = useState<'online' | 'offline' | 'mock'>('offline');
 
@@ -61,6 +77,37 @@ export default function App() {
       setModels(prev => prev.map(m => m.id === activeModelId ? { ...m, content } : m));
     }
   };
+
+  // Persistence
+  useEffect(() => {
+    localStorage.setItem('spice_files', JSON.stringify(files));
+  }, [files]);
+
+  useEffect(() => {
+    localStorage.setItem('spice_models', JSON.stringify(models));
+  }, [models]);
+
+  useEffect(() => {
+    if (activeFileId) localStorage.setItem('spice_active_file_id', activeFileId);
+    else localStorage.removeItem('spice_active_file_id');
+  }, [activeFileId]);
+
+  useEffect(() => {
+    if (activeModelId) localStorage.setItem('spice_active_model_id', activeModelId);
+    else localStorage.removeItem('spice_active_model_id');
+  }, [activeModelId]);
+
+  useEffect(() => {
+    localStorage.setItem('spice_logs', logs);
+  }, [logs]);
+
+  useEffect(() => {
+    localStorage.setItem('spice_bridge_url', bridgeUrl);
+  }, [bridgeUrl]);
+
+  useEffect(() => {
+    localStorage.setItem('spice_sidebar_tab', sidebarTab);
+  }, [sidebarTab]);
 
   // Check bridge status
   useEffect(() => {
@@ -345,7 +392,18 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-2 space-y-2">
+                  <button 
+                    onClick={() => {
+                      if (confirm("Are you sure you want to reset the IDE? This will delete all your files and models.")) {
+                        localStorage.clear();
+                        window.location.reload();
+                      }
+                    }}
+                    className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-500 py-3 rounded-xl text-sm font-bold transition-all border border-red-500/20"
+                  >
+                    Reset IDE Data
+                  </button>
                   <button 
                     onClick={() => setShowSettings(false)}
                     className="w-full bg-white/5 hover:bg-white/10 py-3 rounded-xl text-sm font-bold transition-all"
