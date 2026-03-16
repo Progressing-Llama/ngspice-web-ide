@@ -7,6 +7,8 @@ interface PlotViewerProps {
 }
 
 export const PlotViewer: React.FC<PlotViewerProps> = ({ data }) => {
+  const [hiddenKeys, setHiddenKeys] = React.useState<Set<string>>(new Set());
+
   if (!data || data.length === 0) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center text-white/30 bg-[#151619] border border-white/10 rounded-lg">
@@ -26,7 +28,7 @@ export const PlotViewer: React.FC<PlotViewerProps> = ({ data }) => {
                    allKeys[0];
 
   const keys = allKeys.filter(k => k !== xAxisKey);
-  const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
+  const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#ec4899'];
 
   const getXLabel = (key: string) => {
     if (key.toLowerCase() === 'time') return 'Time (s)';
@@ -35,11 +37,26 @@ export const PlotViewer: React.FC<PlotViewerProps> = ({ data }) => {
     return key;
   };
 
+  const handleLegendClick = (e: any) => {
+    const { dataKey } = e;
+    setHiddenKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(dataKey)) next.delete(dataKey);
+      else next.add(dataKey);
+      return next;
+    });
+  };
+
   return (
     <div className="h-full w-full bg-[#151619] p-4 border border-white/10 rounded-lg flex flex-col">
-      <div className="flex items-center gap-2 mb-4 text-white/50">
-        <ChartIcon size={14} />
-        <span className="text-xs uppercase tracking-wider font-semibold">Simulation Plots</span>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2 text-white/50">
+          <ChartIcon size={14} />
+          <span className="text-xs uppercase tracking-wider font-semibold">Simulation Plots</span>
+        </div>
+        <div className="text-[10px] text-white/30 italic">
+          Click legend to toggle traces
+        </div>
       </div>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
@@ -61,7 +78,10 @@ export const PlotViewer: React.FC<PlotViewerProps> = ({ data }) => {
               contentStyle={{ backgroundColor: '#1e1e1e', border: '1px solid #ffffff20', borderRadius: '8px', fontSize: '12px' }}
               itemStyle={{ color: '#fff' }}
             />
-            <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
+            <Legend 
+              wrapperStyle={{ fontSize: '10px', paddingTop: '10px', cursor: 'pointer' }} 
+              onClick={handleLegendClick}
+            />
             {keys.map((key, index) => (
               <Line 
                 key={key} 
@@ -71,6 +91,7 @@ export const PlotViewer: React.FC<PlotViewerProps> = ({ data }) => {
                 dot={false} 
                 strokeWidth={2}
                 animationDuration={500}
+                hide={hiddenKeys.has(key)}
               />
             ))}
           </LineChart>

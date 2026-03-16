@@ -182,7 +182,57 @@ export default function App() {
 
       if (result.success) {
         if (result.plotData && result.plotData.length > 0) {
-          setPlotData(result.plotData);
+          // Extract signals from plot command in .control block
+          const signalsToPlot: string[] = [];
+          const controlMatch = activeFile.content.match(/\.control([\s\S]*?)\.endc/i);
+          if (controlMatch) {
+            const controlContent = controlMatch[1];
+            const plotLines = controlContent.split('\n')
+              .map(l => l.trim())
+              .filter(l => l.toLowerCase().startsWith('plot'));
+            
+            plotLines.forEach(line => {
+              const parts = line.split(/\s+/).slice(1);
+              parts.forEach(p => {
+                if (p && !p.startsWith('-')) {
+                  signalsToPlot.push(p.toLowerCase());
+                }
+              });
+            });
+          }
+
+          if (signalsToPlot.length > 0) {
+            // Filter data to only include requested signals + time
+            const filteredData = result.plotData.map((point: any) => {
+              const newPoint: any = { time: point.time };
+              const timeKey = Object.keys(point).find(k => k.toLowerCase() === 'time');
+              if (timeKey) newPoint[timeKey] = point[timeKey];
+
+              signalsToPlot.forEach(sig => {
+                const key = Object.keys(point).find(k => k.toLowerCase() === sig);
+                if (key) {
+                  newPoint[key] = point[key];
+                }
+              });
+              return newPoint;
+            });
+            setPlotData(filteredData);
+            setLogs(prev => prev + `Plotting ${signalsToPlot.length} signals specified in .control block.\n`);
+          } else {
+            // Default: only plot node voltages to avoid cluttering with currents
+            const filteredData = result.plotData.map((point: any) => {
+              const newPoint: any = { time: point.time };
+              Object.keys(point).forEach(key => {
+                const lowerKey = key.toLowerCase();
+                if (lowerKey.startsWith('v(') || lowerKey === 'time' || lowerKey === 'v1' || lowerKey === 'v2') {
+                  newPoint[key] = point[key];
+                }
+              });
+              return newPoint;
+            });
+            setPlotData(filteredData);
+            setLogs(prev => prev + "No 'plot' command found. Defaulting to node voltages. Use 'plot v(node)' in .control for specific signals.\n");
+          }
         } else if (result.stdout === "No stdout captured." && result.stderr === "No stderr captured.") {
           setLogs(prev => prev + "Warning: Simulation returned no output. Please check if ngspice is installed and in your PATH.\n");
           if (result.debug) {
