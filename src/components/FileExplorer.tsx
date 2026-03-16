@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Plus, Save, Trash2 } from 'lucide-react';
+import { FileText, Plus, Edit2, Trash2, Download } from 'lucide-react';
 import { SpiceFile } from '../types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -14,6 +14,8 @@ interface FileExplorerProps {
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
+  onRename: (id: string, newName: string) => void;
+  onDownload: (file: SpiceFile) => void;
 }
 
 export const FileExplorer: React.FC<FileExplorerProps> = ({ 
@@ -21,8 +23,25 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   activeFileId, 
   onSelect, 
   onNew,
-  onDelete
+  onDelete,
+  onRename,
+  onDownload
 }) => {
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [editName, setEditName] = React.useState("");
+
+  const startEditing = (file: SpiceFile) => {
+    setEditingId(file.id);
+    setEditName(file.name);
+  };
+
+  const submitRename = () => {
+    if (editingId && editName.trim()) {
+      onRename(editingId, editName.trim());
+    }
+    setEditingId(null);
+  };
+
   return (
     <div className="h-full w-full flex flex-col bg-[#151619] border-r border-white/10">
       <div className="p-4 border-b border-white/10 flex items-center justify-between">
@@ -45,19 +64,54 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
             )}
             onClick={() => onSelect(file.id)}
           >
-            <div className="flex items-center gap-2 overflow-hidden">
+            <div className="flex items-center gap-2 overflow-hidden flex-1">
               <FileText size={14} className={activeFileId === file.id ? "text-blue-400" : "text-white/30"} />
-              <span className="text-sm truncate">{file.name}</span>
+              {editingId === file.id ? (
+                <input
+                  autoFocus
+                  className="bg-black/40 border border-blue-500/50 rounded px-1 text-sm w-full outline-none"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onBlur={submitRename}
+                  onKeyDown={(e) => e.key === 'Enter' && submitRename()}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span className="text-sm truncate">{file.name}</span>
+              )}
             </div>
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(file.id);
-              }}
-              className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 transition-all"
-            >
-              <Trash2 size={12} />
-            </button>
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDownload(file);
+                }}
+                className="p-1 hover:text-blue-400 transition-all"
+                title="Download"
+              >
+                <Download size={12} />
+              </button>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  startEditing(file);
+                }}
+                className="p-1 hover:text-yellow-400 transition-all"
+                title="Rename"
+              >
+                <Edit2 size={12} />
+              </button>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(file.id);
+                }}
+                className="p-1 hover:text-red-400 transition-all"
+                title="Delete"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
           </div>
         ))}
       </div>

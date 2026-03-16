@@ -1,5 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Play, Square, Settings, Download, Cpu, Activity, Info } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { 
+  Play, Square, Settings, Download, Cpu, Activity, Info, 
+  PanelLeft, PanelBottom, PanelRight, FileText
+} from 'lucide-react';
 import { SpiceEditor } from './components/SpiceEditor';
 import { Console } from './components/Console';
 import { PlotViewer } from './components/PlotViewer';
@@ -8,6 +11,7 @@ import { FileExplorer } from './components/FileExplorer';
 import { SpiceFile, SimulationResult, SpiceModel } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { ModelLibrary } from './components/ModelLibrary';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
 const DEFAULT_MODELS: SpiceModel[] = [
   { 
@@ -70,6 +74,24 @@ export default function App() {
   });
   const [bridgeStatus, setBridgeStatus] = useState<'online' | 'offline' | 'mock'>('offline');
 
+  // Toggle states
+  const [showSidebar, setShowSidebar] = useState(() => {
+    const saved = localStorage.getItem('spice_show_sidebar');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+  const [showConsole, setShowConsole] = useState(() => {
+    const saved = localStorage.getItem('spice_show_console');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+  const [showRightPanel, setShowRightPanel] = useState(() => {
+    const saved = localStorage.getItem('spice_show_right_panel');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+  const [showEditor, setShowEditor] = useState(() => {
+    const saved = localStorage.getItem('spice_show_editor');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
   const activeFile = files.find(f => f.id === activeFileId);
   const activeModel = models.find(m => m.id === activeModelId);
 
@@ -116,6 +138,22 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('spice_right_panel_tab', rightPanelTab);
   }, [rightPanelTab]);
+
+  useEffect(() => {
+    localStorage.setItem('spice_show_sidebar', JSON.stringify(showSidebar));
+  }, [showSidebar]);
+
+  useEffect(() => {
+    localStorage.setItem('spice_show_console', JSON.stringify(showConsole));
+  }, [showConsole]);
+
+  useEffect(() => {
+    localStorage.setItem('spice_show_right_panel', JSON.stringify(showRightPanel));
+  }, [showRightPanel]);
+
+  useEffect(() => {
+    localStorage.setItem('spice_show_editor', JSON.stringify(showEditor));
+  }, [showEditor]);
 
   // Check bridge status
   useEffect(() => {
@@ -266,6 +304,22 @@ export default function App() {
     if (activeFileId === id) setActiveFileId(files[0]?.id || null);
   };
 
+  const handleRenameFile = (id: string, newName: string) => {
+    setFiles(prev => prev.map(f => f.id === id ? { ...f, name: newName } : f));
+  };
+
+  const handleDownloadFile = (file: SpiceFile) => {
+    const blob = new Blob([file.content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const downloadBridge = () => {
     // In a real app, this would trigger a download of bridge.py
     alert("You can find the bridge.py code in the project files. Run it locally with 'python bridge.py' to connect your local ngspice.");
@@ -295,6 +349,37 @@ export default function App() {
 
         <div className="flex items-center gap-2">
           <button 
+            onClick={() => setShowSidebar(!showSidebar)}
+            className={`p-2 rounded-md transition-colors ${showSidebar ? 'bg-blue-500/20 text-blue-400' : 'text-white/40 hover:bg-white/5'}`}
+            title="Toggle Sidebar"
+          >
+            <PanelLeft size={18} />
+          </button>
+          <button 
+            onClick={() => setShowEditor(!showEditor)}
+            className={`p-2 rounded-md transition-colors ${showEditor ? 'bg-blue-500/20 text-blue-400' : 'text-white/40 hover:bg-white/5'}`}
+            title="Toggle Editor"
+          >
+            <FileText size={18} />
+          </button>
+          <button 
+            onClick={() => setShowConsole(!showConsole)}
+            className={`p-2 rounded-md transition-colors ${showConsole ? 'bg-blue-500/20 text-blue-400' : 'text-white/40 hover:bg-white/5'}`}
+            title="Toggle Console"
+          >
+            <PanelBottom size={18} />
+          </button>
+          <button 
+            onClick={() => setShowRightPanel(!showRightPanel)}
+            className={`p-2 rounded-md transition-colors ${showRightPanel ? 'bg-blue-500/20 text-blue-400' : 'text-white/40 hover:bg-white/5'}`}
+            title="Toggle Right Panel"
+          >
+            <PanelRight size={18} />
+          </button>
+
+          <div className="w-px h-6 bg-white/10 mx-2" />
+
+          <button 
             onClick={handleRunSimulation}
             disabled={isSimulating || !activeFile}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-1.5 rounded-md text-xs font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95"
@@ -314,106 +399,132 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main Content with Resizable Panels */}
       <main className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-72 flex-shrink-0 flex flex-col border-r border-white/10 bg-[#0c0c0d]">
-          {/* Sidebar Tabs */}
-          <div className="flex border-b border-white/10">
-            <button 
-              onClick={() => setSidebarTab('files')}
-              className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition-all ${
-                sidebarTab === 'files' ? 'text-blue-400 bg-white/5 border-b-2 border-blue-500' : 'text-white/30 hover:text-white/60'
-              }`}
-            >
-              Files
-            </button>
-            <button 
-              onClick={() => setSidebarTab('models')}
-              className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition-all ${
-                sidebarTab === 'models' ? 'text-blue-400 bg-white/5 border-b-2 border-blue-500' : 'text-white/30 hover:text-white/60'
-              }`}
-            >
-              Library
-            </button>
-          </div>
+        <PanelGroup direction="horizontal" autoSaveId="layout-main">
+          {/* Sidebar Panel */}
+          {showSidebar && (
+            <>
+              <Panel defaultSize={20} minSize={15} maxSize={40} className="flex flex-col bg-[#0c0c0d]">
+                <div className="flex border-b border-white/10">
+                  <button 
+                    onClick={() => setSidebarTab('files')}
+                    className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                      sidebarTab === 'files' ? 'text-blue-400 bg-white/5 border-b-2 border-blue-500' : 'text-white/30 hover:text-white/60'
+                    }`}
+                  >
+                    Files
+                  </button>
+                  <button 
+                    onClick={() => setSidebarTab('models')}
+                    className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                      sidebarTab === 'models' ? 'text-blue-400 bg-white/5 border-b-2 border-blue-500' : 'text-white/30 hover:text-white/60'
+                    }`}
+                  >
+                    Library
+                  </button>
+                </div>
 
-          <div className="flex-1 overflow-hidden">
-            {sidebarTab === 'files' ? (
-              <FileExplorer 
-                files={files} 
-                activeFileId={activeFileId} 
-                onSelect={(id) => {
-                  setActiveFileId(id);
-                  setActiveModelId(null);
-                }}
-                onNew={handleNewFile}
-                onDelete={handleDeleteFile}
-              />
-            ) : (
-              <ModelLibrary 
-                models={models}
-                activeModelId={activeModelId}
-                onAdd={(m) => setModels(prev => [...prev, m])}
-                onUpdate={(m) => setModels(prev => prev.map(old => old.id === m.id ? m : old))}
-                onDelete={(id) => {
-                  setModels(prev => prev.filter(m => m.id !== id));
-                  if (activeModelId === id) setActiveModelId(null);
-                }}
-                onToggle={(id) => setModels(prev => prev.map(m => m.id === id ? { ...m, enabled: !m.enabled } : m))}
-                onSelect={(id) => {
-                  setActiveModelId(id);
-                  setActiveFileId(null);
-                }}
-              />
-            )}
-          </div>
-        </aside>
+                <div className="flex-1 overflow-hidden">
+                  {sidebarTab === 'files' ? (
+                    <FileExplorer 
+                      files={files} 
+                      activeFileId={activeFileId} 
+                      onSelect={(id) => {
+                        setActiveFileId(id);
+                        setActiveModelId(null);
+                      }}
+                      onNew={handleNewFile}
+                      onDelete={handleDeleteFile}
+                      onRename={handleRenameFile}
+                      onDownload={handleDownloadFile}
+                    />
+                  ) : (
+                    <ModelLibrary 
+                      models={models}
+                      activeModelId={activeModelId}
+                      onAdd={(m) => setModels(prev => [...prev, m])}
+                      onUpdate={(m) => setModels(prev => prev.map(old => old.id === m.id ? m : old))}
+                      onDelete={(id) => {
+                        setModels(prev => prev.filter(m => m.id !== id));
+                        if (activeModelId === id) setActiveModelId(null);
+                      }}
+                      onToggle={(id) => setModels(prev => prev.map(m => m.id === id ? { ...m, enabled: !m.enabled } : m))}
+                      onSelect={(id) => {
+                        setActiveModelId(id);
+                        setActiveFileId(null);
+                      }}
+                    />
+                  )}
+                </div>
+              </Panel>
+              <PanelResizeHandle className="w-1 bg-white/5 hover:bg-blue-500/30 transition-colors cursor-col-resize" />
+            </>
+          )}
 
-        {/* Editor and Results Area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Top: Editor and Plot/Schematic */}
-          <div className="flex-1 flex overflow-hidden p-4 gap-4">
-            <div className="flex-[3] min-w-0">
-              <SpiceEditor 
-                value={activeFile?.content || activeModel?.content || ""} 
-                onChange={handleContentChange} 
-              />
-            </div>
-            <div className="flex-[2] min-w-0 flex flex-col gap-2">
-              <div className="flex items-center gap-1 p-1 bg-black/20 rounded-lg w-fit">
-                <button
-                  onClick={() => setRightPanelTab('plot')}
-                  className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${
-                    rightPanelTab === 'plot' ? 'bg-blue-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'
-                  }`}
-                >
-                  Plot
-                </button>
-                <button
-                  onClick={() => setRightPanelTab('schematic')}
-                  className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${
-                    rightPanelTab === 'schematic' ? 'bg-blue-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'
-                  }`}
-                >
-                  Schematic
-                </button>
-              </div>
-              <div className="flex-1 min-h-0">
-                {rightPanelTab === 'plot' ? (
-                  <PlotViewer data={plotData} />
-                ) : (
-                  <SchematicViewer netlist={activeFile?.content || ""} />
-                )}
-              </div>
-            </div>
-          </div>
+          {/* Editor and Results Panel Group */}
+          <Panel className="flex flex-col overflow-hidden">
+            <PanelGroup direction="vertical" autoSaveId="layout-vertical">
+              <Panel defaultSize={70} minSize={20} className="flex flex-col overflow-hidden">
+                <PanelGroup direction="horizontal" autoSaveId="layout-horizontal">
+                  {/* Editor Panel */}
+                  {showEditor && (
+                    <Panel minSize={20} className="p-4">
+                      <SpiceEditor 
+                        value={activeFile?.content || activeModel?.content || ""} 
+                        onChange={handleContentChange} 
+                      />
+                    </Panel>
+                  )}
+                  
+                  {showEditor && showRightPanel && (
+                    <PanelResizeHandle className="w-1 bg-white/5 hover:bg-blue-500/30 transition-colors cursor-col-resize" />
+                  )}
+                  
+                  {showRightPanel && (
+                    <Panel defaultSize={40} minSize={20} className="p-4 pl-0 flex flex-col gap-2">
+                        <div className="flex items-center gap-1 p-1 bg-black/20 rounded-lg w-fit">
+                          <button
+                            onClick={() => setRightPanelTab('plot')}
+                            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${
+                              rightPanelTab === 'plot' ? 'bg-blue-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'
+                            }`}
+                          >
+                            Plot
+                          </button>
+                          <button
+                            onClick={() => setRightPanelTab('schematic')}
+                            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${
+                              rightPanelTab === 'schematic' ? 'bg-blue-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'
+                            }`}
+                          >
+                            Schematic
+                          </button>
+                        </div>
+                        <div className="flex-1 min-h-0">
+                          {rightPanelTab === 'plot' ? (
+                            <PlotViewer data={plotData} />
+                          ) : (
+                            <SchematicViewer netlist={activeFile?.content || ""} />
+                          )}
+                        </div>
+                      </Panel>
+                  )}
+                </PanelGroup>
+              </Panel>
 
-          {/* Bottom: Console */}
-          <div className="h-64 p-4 pt-0">
-            <Console logs={logs} />
-          </div>
-        </div>
+              {/* Console Panel */}
+              {showConsole && (
+                <>
+                  <PanelResizeHandle className="h-1 bg-white/5 hover:bg-blue-500/30 transition-colors cursor-row-resize" />
+                  <Panel defaultSize={30} minSize={10} className="p-4 pt-0">
+                    <Console logs={logs} />
+                  </Panel>
+                </>
+              )}
+            </PanelGroup>
+          </Panel>
+        </PanelGroup>
       </main>
 
       {/* Settings Modal Overlay */}
