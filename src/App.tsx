@@ -3,6 +3,7 @@ import { Play, Square, Settings, Download, Cpu, Activity, Info } from 'lucide-re
 import { SpiceEditor } from './components/SpiceEditor';
 import { Console } from './components/Console';
 import { PlotViewer } from './components/PlotViewer';
+import { SchematicViewer } from './components/SchematicViewer';
 import { FileExplorer } from './components/FileExplorer';
 import { SpiceFile, SimulationResult, SpiceModel } from './types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -64,6 +65,9 @@ export default function App() {
     return localStorage.getItem('spice_bridge_url') || "http://localhost:5000";
   });
   const [showSettings, setShowSettings] = useState(false);
+  const [rightPanelTab, setRightPanelTab] = useState<'plot' | 'schematic'>(() => {
+    return (localStorage.getItem('spice_right_panel_tab') as 'plot' | 'schematic') || 'plot';
+  });
   const [bridgeStatus, setBridgeStatus] = useState<'online' | 'offline' | 'mock'>('offline');
 
   const activeFile = files.find(f => f.id === activeFileId);
@@ -108,6 +112,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('spice_sidebar_tab', sidebarTab);
   }, [sidebarTab]);
+
+  useEffect(() => {
+    localStorage.setItem('spice_right_panel_tab', rightPanelTab);
+  }, [rightPanelTab]);
 
   // Check bridge status
   useEffect(() => {
@@ -314,7 +322,7 @@ export default function App() {
 
         {/* Editor and Results Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Top: Editor and Plot */}
+          {/* Top: Editor and Plot/Schematic */}
           <div className="flex-1 flex overflow-hidden p-4 gap-4">
             <div className="flex-[3] min-w-0">
               <SpiceEditor 
@@ -322,8 +330,32 @@ export default function App() {
                 onChange={handleContentChange} 
               />
             </div>
-            <div className="flex-[2] min-w-0">
-              <PlotViewer data={plotData} />
+            <div className="flex-[2] min-w-0 flex flex-col gap-2">
+              <div className="flex items-center gap-1 p-1 bg-black/20 rounded-lg w-fit">
+                <button
+                  onClick={() => setRightPanelTab('plot')}
+                  className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${
+                    rightPanelTab === 'plot' ? 'bg-blue-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'
+                  }`}
+                >
+                  Plot
+                </button>
+                <button
+                  onClick={() => setRightPanelTab('schematic')}
+                  className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${
+                    rightPanelTab === 'schematic' ? 'bg-blue-500 text-white shadow-lg' : 'text-white/40 hover:text-white/60'
+                  }`}
+                >
+                  Schematic
+                </button>
+              </div>
+              <div className="flex-1 min-h-0">
+                {rightPanelTab === 'plot' ? (
+                  <PlotViewer data={plotData} />
+                ) : (
+                  <SchematicViewer netlist={activeFile?.content || ""} />
+                )}
+              </div>
             </div>
           </div>
 
