@@ -17,9 +17,23 @@ export const PlotViewer: React.FC<PlotViewerProps> = ({ data }) => {
     );
   }
 
-  // Dynamically get keys for lines (excluding 'time')
-  const keys = Object.keys(data[0]).filter(k => k !== 'time');
+  // Determine the X-axis key. 
+  // ngspice usually puts the scale variable (time, frequency, sweep) first.
+  const allKeys = Object.keys(data[0]);
+  const xAxisKey = allKeys.find(k => k.toLowerCase() === 'time') || 
+                   allKeys.find(k => k.toLowerCase() === 'frequency') || 
+                   allKeys.find(k => k.toLowerCase() === 'v-sweep') ||
+                   allKeys[0];
+
+  const keys = allKeys.filter(k => k !== xAxisKey);
   const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
+
+  const getXLabel = (key: string) => {
+    if (key.toLowerCase() === 'time') return 'Time (s)';
+    if (key.toLowerCase() === 'frequency') return 'Frequency (Hz)';
+    if (key.toLowerCase().includes('sweep')) return 'Sweep Value';
+    return key;
+  };
 
   return (
     <div className="h-full w-full bg-[#151619] p-4 border border-white/10 rounded-lg flex flex-col">
@@ -32,16 +46,16 @@ export const PlotViewer: React.FC<PlotViewerProps> = ({ data }) => {
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
             <XAxis 
-              dataKey="time" 
+              dataKey={xAxisKey} 
               stroke="#ffffff50" 
               fontSize={10} 
-              tickFormatter={(val) => val.toFixed(2)}
-              label={{ value: 'Time (s)', position: 'insideBottom', offset: -5, fill: '#ffffff50', fontSize: 10 }}
+              tickFormatter={(val) => typeof val === 'number' ? val.toFixed(2) : val}
+              label={{ value: getXLabel(xAxisKey), position: 'insideBottom', offset: -5, fill: '#ffffff50', fontSize: 10 }}
             />
             <YAxis 
               stroke="#ffffff50" 
               fontSize={10}
-              label={{ value: 'Voltage (V)', angle: -90, position: 'insideLeft', fill: '#ffffff50', fontSize: 10 }}
+              label={{ value: 'Magnitude', angle: -90, position: 'insideLeft', fill: '#ffffff50', fontSize: 10 }}
             />
             <Tooltip 
               contentStyle={{ backgroundColor: '#1e1e1e', border: '1px solid #ffffff20', borderRadius: '8px', fontSize: '12px' }}
