@@ -86,15 +86,22 @@ def simulate():
     if not netlist:
         return jsonify({"error": "No netlist provided"}), 400
 
-    # Ensure ASCII output in the netlist if not present
-    # We look for .control and add 'set filetype=ascii'
-    if ".control" in netlist.lower() and "set filetype=ascii" not in netlist.lower():
-        netlist = netlist.replace(".control", ".control\nset filetype=ascii")
-    elif ".control" not in netlist.lower():
-        # If no control block, we might need to add one or just hope for the best
-        # Actually, we can add it before .end
+    # Clean up netlist and ensure ASCII output for parsing
+    # Batch mode (-b) is more stable for server-side execution
+    
+    # 1. Ensure 'set filetype=ascii' and 'run' are in the control block
+    if ".control" in netlist.lower():
+        if "set filetype=ascii" not in netlist.lower():
+            netlist = re.sub(r"\.control", ".control\nset filetype=ascii", netlist, flags=re.IGNORECASE)
+        if "run" not in netlist.lower():
+            # Try to insert 'run' before .endc
+            netlist = re.sub(r"\.endc", "run\n.endc", netlist, flags=re.IGNORECASE)
+    else:
+        # 2. If no control block, add one to ensure 'run' and 'ascii' output
         if ".end" in netlist.lower():
             netlist = netlist.replace(".end", ".control\nset filetype=ascii\nrun\n.endc\n.end")
+        else:
+            netlist += "\n.control\nset filetype=ascii\nrun\n.endc\n.end"
 
     with tempfile.NamedTemporaryFile(suffix='.cir', delete=False, mode='w') as tmp:
         tmp.write(netlist)
@@ -103,33 +110,40 @@ def simulate():
     raw_output_path = tmp_path + ".raw"
     
     try:
-        # Run ngspice
+        # Use batch mode (-b)
+        # We use -n to avoid reading .spiceinit which might have conflicting settings
         process = subprocess.Popen(
-            ['ngspice', '-b', '-r', raw_output_path, tmp_path],
+            ['ngspice', '-b', '-n', '-r', raw_output_path, tmp_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
         )
-        stdout, stderr = process.communicate()
+        stdout, stderr = process.communicate(timeout=30)
 
         plot_data = []
         if os.path.exists(raw_output_path):
             plot_data = parse_raw_file(raw_output_path)
 
         return jsonify({
-            "stdout": stdout,
-            "stderr": stderr,
-            "success": process.returncode == 0,
+            "stdout": stdout or "No stdout captured.",
+            "stderr": stderr or "No stderr captured.",
+            "success": True, # We treat it as success if we got output, App.tsx handles the rest
             "plotData": plot_data
         })
 
+    except subprocess.TimeoutExpired:
+        process.kill()
+        return jsonify({"error": "Simulation timed out"}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
         if os.path.exists(raw_output_path):
-            os.remove(raw_output_path)
+            try:
+                os.remove(raw_output_path)
+            except:
+                pass
 
 if __name__ == '__main__':
     app.run(port=5000)

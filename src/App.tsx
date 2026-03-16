@@ -78,13 +78,22 @@ export default function App() {
 
       const result: SimulationResult = await response.json();
       
+      // Always show stdout and stderr if they exist
+      if (result.stdout) {
+        setLogs(prev => prev + result.stdout + "\n");
+      }
+      if (result.stderr) {
+        setLogs(prev => prev + "STDERR:\n" + result.stderr + "\n");
+      }
+
       if (result.success) {
-        setLogs(prev => prev + result.stdout);
-        if (result.plotData) {
+        if (result.plotData && result.plotData.length > 0) {
           setPlotData(result.plotData);
+        } else {
+          setLogs(prev => prev + "Warning: No plot data found in simulation output.\n");
         }
       } else {
-        setLogs(prev => prev + "Simulation Failed:\n" + result.stderr);
+        setLogs(prev => prev + "Simulation process exited with an error.\n");
       }
     } catch (error) {
       setLogs(prev => prev + "Error connecting to bridge: " + (error as Error).message);
