@@ -13,6 +13,7 @@ R1 1 2 1k
 C1 2 0 1u
 .tran 0.1m 5m
 .control
+set filetype=ascii
 run
 plot v(1) v(2)
 .endc
