@@ -4,10 +4,28 @@ import { LineChart as ChartIcon } from 'lucide-react';
 
 interface PlotViewerProps {
   data?: any[];
+  svgData?: string | null;
 }
 
-export const PlotViewer: React.FC<PlotViewerProps> = ({ data }) => {
+export const PlotViewer: React.FC<PlotViewerProps> = ({ data, svgData }) => {
   const [hiddenKeys, setHiddenKeys] = React.useState<Set<string>>(new Set());
+
+  if (svgData) {
+    return (
+      <div className="h-full w-full bg-[#151619] p-4 border border-white/10 rounded-lg flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2 text-white/50">
+            <ChartIcon size={14} />
+            <span className="text-xs uppercase tracking-wider font-semibold">Native ngspice Plot</span>
+          </div>
+        </div>
+        <div 
+          className="flex-1 min-h-0 w-full h-full flex items-center justify-center bg-white/5 rounded overflow-auto"
+          dangerouslySetInnerHTML={{ __html: svgData }}
+        />
+      </div>
+    );
+  }
 
   if (!data || data.length === 0) {
     return (

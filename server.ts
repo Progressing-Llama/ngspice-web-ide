@@ -40,11 +40,26 @@ Simulation complete.
       v2: 2.5 * Math.sin(i * 0.5) + 2.5
     }));
 
+    // Check if hardcopy is used in netlist
+    let svgData = null;
+    if (netlist.toLowerCase().includes("hardcopy")) {
+      svgData = `
+        <svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100%" height="100%" fill="#1a1b1e"/>
+          <path d="M 0 100 Q 100 0 200 100 T 400 100" stroke="#3b82f6" fill="transparent" stroke-width="2"/>
+          <path d="M 0 100 Q 100 50 200 100 T 400 100" stroke="#10b981" fill="transparent" stroke-width="2"/>
+          <text x="10" y="20" fill="white" font-size="12">Mock Native ngspice Plot (SVG)</text>
+          <line x1="0" y1="100" x2="400" y2="100" stroke="white" stroke-opacity="0.2"/>
+        </svg>
+      `;
+    }
+
     res.json({
       stdout: mockOutput,
       stderr: "",
       success: true,
-      plotData: mockPlotData
+      plotData: mockPlotData,
+      svgData: svgData
     });
   });
 

@@ -132,6 +132,13 @@ def simulate():
             f.flush()
             os.fsync(f.fileno())
 
+        # Search for hardcopy filename in netlist
+        hardcopy_match = re.search(r"hardcopy\s+([^\s\n]+)", netlist, re.IGNORECASE)
+        hardcopy_file = hardcopy_match.group(1) if hardcopy_match else None
+        
+        # If hardcopy is used, we'll look for this file in the current directory or temp dir
+        # ngspice usually writes to the CWD.
+        
         # Use batch mode (-b)
         # -n: don't read .spiceinit
         # -r: raw output file
@@ -145,7 +152,8 @@ def simulate():
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, # Merge stderr into stdout
-            text=True
+            text=True,
+            cwd=tmp_dir # Run in temp dir so hardcopy files go there
         )
         stdout_capture, _ = process.communicate(timeout=30)
 
@@ -165,11 +173,31 @@ def simulate():
             plot_data = parse_raw_file(raw_output_path)
             print(f"Parsed {len(plot_data)} data points.")
 
+        # Check for SVG data if hardcopy was used
+        svg_data = None
+        if hardcopy_file:
+            # Check both relative to tmp_dir and absolute
+            potential_paths = [
+                os.path.join(tmp_dir, hardcopy_file),
+                hardcopy_file
+            ]
+            for p in potential_paths:
+                if os.path.exists(p):
+                    try:
+                        with open(p, 'r') as f:
+                            svg_data = f.read()
+                        # Clean up the hardcopy file
+                        os.remove(p)
+                        break
+                    except Exception as e:
+                        print(f"Error reading hardcopy file: {e}")
+
         return jsonify({
             "stdout": final_output or "No output captured from ngspice.",
             "stderr": "", # Merged into stdout
             "success": True,
             "plotData": plot_data,
+            "svgData": svg_data,
             "debug": {
                 "command": ' '.join(cmd),
                 "return_code": process.returncode,

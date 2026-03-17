@@ -36,6 +36,9 @@ C1 2 0 1u
 .control
 set filetype=ascii
 run
+* To see native ngspice plot (SVG):
+* set hcopydevtype=svg
+* hardcopy my_plot.svg v(1) v(2)
 plot v(1) v(2)
 .endc
 .end`;
@@ -64,6 +67,7 @@ export default function App() {
     return localStorage.getItem('spice_logs') || "";
   });
   const [plotData, setPlotData] = useState<any[]>([]);
+  const [svgData, setSvgData] = useState<string | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [bridgeUrl, setBridgeUrl] = useState(() => {
     return localStorage.getItem('spice_bridge_url') || "http://localhost:5000";
@@ -219,6 +223,7 @@ export default function App() {
       }
 
       if (result.success) {
+        setSvgData(result.svgData || null);
         if (result.plotData && result.plotData.length > 0) {
           // Extract signals from plot command in .control block
           const signalsToPlot: string[] = [];
@@ -503,7 +508,7 @@ export default function App() {
                         </div>
                         <div className="flex-1 min-h-0">
                           {rightPanelTab === 'plot' ? (
-                            <PlotViewer data={plotData} />
+                            <PlotViewer data={plotData} svgData={svgData} />
                           ) : (
                             <SchematicViewer netlist={activeFile?.content || ""} />
                           )}
